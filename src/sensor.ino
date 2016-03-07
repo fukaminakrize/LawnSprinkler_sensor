@@ -25,9 +25,10 @@ PubSubClient mqtt_client;
 
 unsigned long update_interval = DEFAULT_DATA_UPDATE_INTERVAL;
 
-int data_to_int(unsigned char *data, unsigned length, bool *err) {
+// Convert ascii data to unsigned long (32b)
+unsigned long data_to_long(unsigned char *data, unsigned length, bool *err) {
     *err = false;
-    int x = 0;
+    unsigned long x = 0;
     for (unsigned i = 0; i < length; i++) {
         char digit = data[i] - '0';
         if (digit > 9 || digit < 0) {
@@ -87,7 +88,7 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     // Data update interval change
     } else if (strcmp(topic, MQTT_TOPIC_DATA_UPDATE_INTERVAL) == 0) {
         bool err;
-        int new_update_interval = data_to_int(payload, length, &err);
+        unsigned long new_update_interval = data_to_long(payload, length, &err);
         if (!err && new_update_interval >= MIN_DATA_UPDATE_INTERVAL) {
             //Serial.print("Updating data update interval to: "); Serial.println(new_update_interval);
             update_interval = new_update_interval;
@@ -117,6 +118,7 @@ void setup() {
     digitalWrite(COMPRESSOR_RELAY_PIN, LOW);
 
     Serial.begin(9600);
+    Serial.println("S");
 
     Ethernet.begin(mac, ip);
     mqtt_client = PubSubClient(MQTT_BROKER_HOST, MQTT_BROKER_PORT, mqtt_callback, ethernet_client);
