@@ -17,6 +17,9 @@
 #define DEFAULT_DATA_UPDATE_INTERVAL 60000
 #define MIN_DATA_UPDATE_INTERVAL 30000
 
+#define SRAM_USAGE_REPORT
+#define SRAM_USAGE_REPORT_INTERVAL 5000
+
 byte mac[] = { 0x54, 0x34, 0x41, 0x30, 0x30, 0x31 };
 IPAddress ip(192,168,2,190);
 
@@ -24,6 +27,13 @@ EthernetClient ethernet_client;
 PubSubClient mqtt_client;
 
 unsigned long update_interval = DEFAULT_DATA_UPDATE_INTERVAL;
+
+inline void report_sram_usage() {
+    // https://learn.adafruit.com/memories-of-an-arduino/measuring-free-memory
+    extern int __heap_start, *__brkval;
+    int v;
+    Serial.println((int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval));
+}
 
 // Convert ascii data to unsigned long (32b)
 unsigned long data_to_long(unsigned char *data, unsigned length, bool *err) {
@@ -64,13 +74,15 @@ float get_moisture_level() {
 void mqtt_update_data() {
     float water_level = get_water_level();
     float moisture_level = get_moisture_level();
-
+    float temperature = 20.5;
     // Build the JSON string
     // {
-    //   'water_level': xyz
-    //   'moisture_level': xyz
+    //   "water_level": xyz
+    //   "moisture_level": xyz
+    //   "temperature": xyz
     // }
-    String json_string = String("{'water_level':" + String(water_level, 1) + ",'moisture_level':" + String(moisture_level, 1) + "}");
+    String json_string = String(String(F("{\"water_level\":")) + String(water_level, 1) + String(F(",\"moisture_level\":")) + String(moisture_level, 1) + String(F(",\"temperature\":")) + temperature + String(F("}")));  //623 bytes free
+    //String json_string = String("{\"water_level\":" + String(water_level, 1) + ",\"moisture_level\":" + String(moisture_level, 1) + ",\"temperature\":" + temperature + "}");   //569 bytes free
 
     //Serial.println(json_string);
 
@@ -98,9 +110,9 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
 
 void mqtt_connect() {
     for (;;) {
-        Serial.println(F("C:"));
+        Serial.println("C:");
         if (mqtt_client.connect(MQTT_ID)) {
-            Serial.println(F("C+"));
+            Serial.println("C+");
             break;
         } else {
             Serial.println("C-");
@@ -131,6 +143,10 @@ void loop() {
 
     unsigned long current_time = millis();
     static unsigned long last_update_time = 0;
+#ifdef SRAM_USAGE_REPORT
+    static unsigned long last_sram_report_time = 0;
+#endif
+
     // Handle millis() rollover after 50 days of running
     if (last_update_time > current_time) {
         // TODO something better
@@ -142,6 +158,14 @@ void loop() {
 
         mqtt_update_data();
     }
+#ifdef SRAM_USAGE_REPORT
+    if (current_time - last_sram_report_time >= SRAM_USAGE_REPORT_INTERVAL) {
+        last_sram_report_time = current_time;
+
+        report_sram_usage();
+    }
+#endif
+
 
     mqtt_client.loop();
 }
